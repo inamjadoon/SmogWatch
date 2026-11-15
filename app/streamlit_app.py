@@ -51,6 +51,7 @@ LSEI_BANDS = [(5, "Low", "#009E73", "little fire smoke is blowing toward Lahore 
 
 
 def lsei_band(v: float) -> tuple[str, str, str]:
+    v = round(v)  # band must match the rounded number shown to the user
     for upper, name, color, text in LSEI_BANDS:
         if v < upper:
             return name, color, text
@@ -166,16 +167,16 @@ with tab_today:
 with tab_cal:
     st.markdown("#### When does the burning happen, and is it getting better or worse?")
     a, b, c = st.columns(3)
-    country = a.selectbox("Region", ["ALL", "PK", "IN"],
-                          format_func={"ALL": "Both countries", "PK": "Pakistan only", "IN": "India only"}.get)
-    constellation = b.selectbox("Satellites", ["core", "all"], format_func={
-        "core": "Fair comparison: same 3 satellites every year",
-        "all": "Maximum detail: all 5 satellites (newer ones from 2018 & 2023)"}.get,
+    REGIONS = {"Both countries": "ALL", "Pakistan only": "PK", "India only": "IN"}
+    SATS = {"Fair comparison: same 3 satellites every year": "core",
+            "Maximum detail: all 5 satellites (newer ones from 2018 & 2023)": "all"}
+    METRICS = {"Number of fires": "n_events", "Total fire intensity (MW)": "sum_frp_mw"}
+    country = REGIONS[a.selectbox("Region", list(REGIONS))]
+    constellation = SATS[b.selectbox(
+        "Satellites", list(SATS),
         help="Newer satellites spot extra fires, so counting with them makes recent years look worse than they "
-             "are. Use 'Fair comparison' to compare years.")
-    metric = c.selectbox("Show", ["n_events", "sum_frp_mw"],
-                         format_func={"n_events": "Number of fires",
-                                      "sum_frp_mw": "Total fire intensity (MW)"}.get)
+             "are. Use 'Fair comparison' to compare years.")]
+    metric = METRICS[c.selectbox("Show", list(METRICS))]
     daily = D["daily"]
     sub = daily[(daily["country"] == country) & (daily["constellation"] == constellation)]
     m = sub.pivot_table(index="year", columns="doy", values=metric, aggfunc="sum")
