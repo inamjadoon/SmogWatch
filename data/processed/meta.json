@@ -1,0 +1,22 @@
+{
+  "built_utc": "2026-11-15 17:08 UTC",
+  "fire_data_latest_date": "2026-11-15",
+  "weather_latest_date": "2026-11-12",
+  "n_events_total": 1202955,
+  "n_detections_total": 1966523,
+  "same_date_vs_last_year": {
+    "this_year": 35539,
+    "last_year": 41383,
+    "change_pct": -14.121740811444313
+  },
+  "same_date_vs_last_year_core": {
+    "this_year": 14109,
+    "last_year": 19256,
+    "change_pct": -26.729331117573743
+  },
+  "core_satellites": [
+    "Terra",
+    "Aqua",
+    "N"
+  ]
+}
