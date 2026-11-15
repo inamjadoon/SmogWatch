@@ -23,7 +23,7 @@ P = ROOT / "data" / "processed"
 C_MODIS, C_VIIRS, C_BOTH = "#E69F00", "#0072B2", "#CC79A7"
 RGB = {"MODIS": [230, 159, 0], "VIIRS": [0, 114, 178], "both": [204, 121, 167]}
 
-st.set_page_config(page_title="SmogWatch Punjab", page_icon="🔥", layout="wide")
+st.set_page_config(page_title="SmogWatch Punjab", layout="wide")
 
 
 @st.cache_data
@@ -59,7 +59,7 @@ def lsei_band(v: float) -> tuple[str, str, str]:
 
 
 def how_to_read(text: str) -> None:
-    with st.expander("ℹ️ How to read this"):
+    with st.expander("How to read this"):
         st.markdown(text)
 
 
@@ -67,7 +67,7 @@ D = load()
 meta = D["meta"]
 latest = pd.Timestamp(meta["fire_data_latest_date"])
 
-st.title("🔥 SmogWatch Punjab")
+st.title("SmogWatch Punjab")
 st.markdown(
     "#### Where are farm fires burning, and is their smoke heading to Lahore?\n"
     "Every autumn, farmers in **Punjab (Pakistan and India) and Haryana** burn leftover rice straw to clear their "
@@ -76,17 +76,17 @@ st.markdown(
     "blowing toward Lahore**.")
 st.caption(f"Satellite fire data up to **{latest:%d %B %Y}** · updated {meta['built_utc']} · "
            "all times are UTC (Pakistan time = UTC + 5 h)")
-with st.expander("👋 New here? What each tab shows"):
+with st.expander("New here? What each tab shows"):
     st.markdown(
-        "- **📍 Today**: a map of fires spotted in the last 2 days, and today's smoke level for Lahore.\n"
-        "- **📅 Burning Calendar**: every year since 2012 at a glance. When does burning start, peak and end? "
+        "- **Today**: a map of fires spotted in the last 2 days, and today's smoke level for Lahore.\n"
+        "- **Burning Calendar**: every year since 2012 at a glance. When does burning start, peak and end? "
         "Is it getting better or worse?\n"
-        "- **🛰️ Why Combine Satellites?**: why we merge two kinds of NASA satellite instead of trusting one.\n"
-        "- **🌫️ Smog Link**: day by day, how much fire smoke the wind carried toward Lahore.\n"
-        "- **ℹ️ About**: how it works, the data, the limits, and a glossary of terms.")
+        "- **Why Combine Satellites?**: why we merge two kinds of NASA satellite instead of trusting one.\n"
+        "- **Smog Link**: day by day, how much fire smoke the wind carried toward Lahore.\n"
+        "- **About**: how it works, the data, the limits, and a glossary of terms.")
 
 tab_today, tab_cal, tab_why, tab_smog, tab_about = st.tabs(
-    ["📍 Today", "📅 Burning Calendar", "🛰️ Why Combine Satellites?", "🌫️ Smog Link", "ℹ️ About"])
+    ["Today", "Burning Calendar", "Why Combine Satellites?", "Smog Link", "About"])
 
 # ---------------------------------------------------------------- Today
 with tab_today:
@@ -128,10 +128,29 @@ with tab_today:
                "recent day with wind data. The 'vs last year' figure uses all satellites; with only the satellites "
                "that have flown since 2012 the change is "
                f"{meta['same_date_vs_last_year_core']['change_pct']:+.0f}%.")
-    st.markdown("##### 🗺️ Fires spotted in the last 2 days")
+    st.markdown("##### Fire map")
+    days = sorted(rec["date"].dt.date.unique())
+    DAY_LABELS = {f"{d:%a %d %b}": d for d in reversed(days)}
+    PERIODS = ["Last 2 days", "Last 7 days", "Last 14 days"] + list(DAY_LABELS)
+    f1, f2, f3 = st.columns([1.2, 1.4, 1])
+    period = f1.selectbox("Show fires from", PERIODS, help="Pick a single day or a recent period.")
+    SEEN = {"VIIRS only": "VIIRS", "MODIS only": "MODIS", "Both": "both"}
+    seen_pick = f2.multiselect("Seen by", list(SEEN), default=list(SEEN),
+                               help="Filter fires by which satellite instrument spotted them.")
+    COUNTRY = {"Pakistan": "PK", "India": "IN"}
+    ctry_pick = f3.multiselect("Country", list(COUNTRY), default=list(COUNTRY))
+    if period.startswith("Last"):
+        n_days = int(period.split()[1])
+        sel = rec[rec["date"] > latest - pd.Timedelta(days=n_days)]
+    else:
+        sel = rec[rec["date"].dt.date == DAY_LABELS[period]]
+    sel = sel[sel["seen_by"].isin([SEEN[k] for k in seen_pick]) & sel["country"].isin([COUNTRY[k] for k in ctry_pick])]
+    st.caption(f"Showing **{len(sel):,} fires** ({period.lower() if period.startswith('Last') else period}). "
+               "Zoom and drag the map; hover over a dot for details.")
+    last48 = sel  # legend counts below follow the current filters
 
-    show = last48.assign(color=last48["seen_by"].map(RGB),
-                         when=last48["first_time_utc"].astype(str).str[:16])
+    show = sel.assign(color=sel["seen_by"].map(RGB),
+                      when=sel["first_time_utc"].astype(str).str[:16])
     layers = [
         pdk.Layer("ScatterplotLayer", show, get_position="[lon, lat]", get_fill_color="color",
                   get_radius=1500, radius_min_pixels=2, opacity=0.8, pickable=True),
@@ -150,7 +169,18 @@ with tab_today:
     st.markdown(f"<span style='color:{C_VIIRS}'>●</span> seen by VIIRS satellites only ({counts.get('VIIRS', 0):,}) "
                 f"&nbsp; <span style='color:{C_MODIS}'>●</span> seen by MODIS satellites only "
                 f"({counts.get('MODIS', 0):,}) &nbsp; <span style='color:{C_BOTH}'>●</span> seen by both "
-                f"({counts.get('both', 0):,}) &nbsp; ⚫ Lahore", unsafe_allow_html=True)
+                f"({counts.get('both', 0):,}) &nbsp; <b>&#9679;</b> Lahore", unsafe_allow_html=True)
+    # Daily trend for the last 14 days (all fires, by country)
+    by_day = (rec.groupby([rec["date"].dt.date, "country"]).size().rename("fires").reset_index()
+              .replace({"country": {"PK": "Pakistan", "IN": "India"}}))
+    by_day = by_day[by_day["country"].isin(["Pakistan", "India"])]
+    fday = px.bar(by_day, x="date", y="fires", color="country", barmode="stack",
+                  color_discrete_map={"Pakistan": "#009E73", "India": "#56B4E9"},
+                  labels={"date": "", "fires": "Fires per day", "country": ""})
+    fday.update_layout(height=260, margin=dict(l=10, r=10, t=30, b=10), title="Fires per day, last 14 days",
+                       legend=dict(orientation="h", y=1.15, x=1, xanchor="right"))
+    st.plotly_chart(fday, width="stretch")
+    st.caption(f"The most recent day ({latest:%d %b}) is still in progress, so its bar is shorter.")
     how_to_read(
         "- **Each dot is one fire** spotted from space by its heat. Zoom with the mouse wheel or pinch; "
         "hover over a dot for details.\n"
@@ -198,6 +228,26 @@ with tab_cal:
         "- What to notice: the dark band in **early-to-mid November** appears every year. That is the peak of "
         "rice-straw burning, just before wheat is sown.")
 
+    st.markdown("##### Compare years")
+    yrs_all = sorted(sub["year"].unique())
+    default_yrs = [y for y in (yrs_all[0], 2021, yrs_all[-2], yrs_all[-1]) if y in yrs_all]
+    pick = st.multiselect("Pick the years to compare", yrs_all, default=sorted(set(default_yrs)),
+                          help="Each line is one burning season. Smoothed over 7 days so the shape is easy to see.")
+    if pick:
+        cmp_df = sub[sub["year"].isin(pick)].sort_values("date").copy()
+        cmp_df["smoothed"] = cmp_df.groupby("year")[metric].transform(
+            lambda x: x.rolling(7, center=True, min_periods=1).mean())
+        cmp_df["day"] = cmp_df["doy"].map(lambda d: pd.Timestamp("2025-01-01") + pd.Timedelta(days=int(d) - 1))
+        cmp_df["year"] = cmp_df["year"].astype(str)
+        fcmp = px.line(cmp_df, x="day", y="smoothed", color="year",
+                       labels={"day": "", "smoothed": "Fires per day (7-day average)" if metric == "n_events"
+                               else "Fire intensity per day (MW, 7-day average)", "year": "Season"})
+        fcmp.update_xaxes(tickformat="%d %b")
+        fcmp.update_traces(hovertemplate="%{x|%d %b}: %{y:,.0f}")
+        fcmp.update_layout(height=360, margin=dict(l=10, r=10, t=10, b=10), hovermode="x unified")
+        st.plotly_chart(fcmp, width="stretch")
+        st.caption("Click a year in the legend to hide or show it; double-click to show only that year.")
+
     stats = D["stats"]
     s = stats[(stats["country"] == country) & (stats["constellation"] == constellation)]
     s_plot = s.assign(season=np.where(s["complete"], "Full season", "Season still in progress"))
@@ -216,8 +266,8 @@ with tab_cal:
             verdict = "there is **no clear rise or fall** in the number of fires"
         else:
             word = "falling" if te["trend"] == "decreasing" else "rising"
-            icon = "📉" if word == "falling" else "📈"
-            verdict = (f"{icon} burning is **{word}**, by about **{abs(te['sen_slope_per_year']):,.0f} fires per "
+            icon = ""
+            verdict = (f"burning is **{word}**, by about **{abs(te['sen_slope_per_year']):,.0f} fires per "
                        "year**")
         timing = ""
         if p50["trend"] != "no trend":
@@ -321,6 +371,33 @@ with tab_smog:
     if len(worst) and worst["lsei"].iloc[0] > 0:
         st.markdown("**Smokiest days this season:** " + ", ".join(
             f"{d:%d %b} ({v:.0f}, {lsei_band(v)[0]})" for d, v in zip(worst["date"], worst["lsei"])))
+
+    st.markdown("##### Look up a day")
+    day_map = {f"{d:%d %b %Y}": d for d in Ly["date"].dt.date}
+    default_day = f"{worst['date'].iloc[0]:%d %b %Y}" if len(worst) else list(day_map)[-1]
+    pick_day = day_map[st.select_slider("Slide to choose a day", options=list(day_map), value=default_day,
+                                        key=f"day_{yr}")]
+    row = Ly[Ly["date"].dt.date == pick_day].iloc[0]
+    COMPASS = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"]
+    wind_from = COMPASS[int(((row["wd10m_deg"] + 22.5) % 360) // 45)]
+    b_name, b_color, b_text = lsei_band(row["lsei"])
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Smoke score", f"{row['lsei']:.0f} / 100 · {b_name}")
+    k2.metric("Wind came from the", wind_from, f"{row['ws10m_ms']:.1f} m/s", delta_color="off",
+              help="Fires in this direction from Lahore send their smoke toward the city.")
+    k3.metric("Fires upwind of Lahore", f"{row['lsei_upwind_events']:,.0f}")
+    k4.metric("Humidity", f"{row['rh2m_pct']:.0f}%",
+              help="Humid, calm air traps smoke near the ground.")
+    share = row["lsei_pk_share"]
+    detail = (f"On **{pick_day:%d %B %Y}** the wind blew from the **{wind_from}** at {row['ws10m_ms']:.1f} m/s"
+              f"{' (calm, so smoke lingered)' if row['ws10m_ms'] < 2 else ''}. ")
+    if row["lsei_upwind_events"] > 0 and not np.isnan(share):
+        detail += (f"{row['lsei_upwind_events']:,.0f} fires were upwind of Lahore, with **{share:.0%} of their heat "
+                   f"from Pakistan** and {1 - share:.0%} from India. ")
+    else:
+        detail += "No fires were upwind of Lahore that day. "
+    detail += f"Smoke level: <span style='color:{b_color};font-weight:700'>{b_name}</span>: {b_text}."
+    st.markdown(detail, unsafe_allow_html=True)
     how_to_read(
         "- **Each bar is one day.** Taller and redder bars mean more fire smoke was blowing toward Lahore.\n"
         "- **The grey line** is the number of fires that were *upwind* (in the direction the wind came from).\n"
@@ -331,16 +408,16 @@ with tab_smog:
     w = (Ly["lsei_upwind_frp_mw"] * Ly["lsei_pk_share"]).sum() / Ly["lsei_upwind_frp_mw"].sum() \
         if Ly["lsei_upwind_frp_mw"].sum() else np.nan
     if not np.isnan(w):
-        st.markdown(f"🇵🇰 🇮🇳 **Where the smoke came from in {yr}:** of the fire heat upwind of Lahore, "
+        st.markdown(f"**Where the smoke came from in {yr}:** of the fire heat upwind of Lahore, "
                     f"**{w:.0%} was from fires in Pakistan** and **{1 - w:.0%} from fires in India** "
                     f"({len(pk)} days had upwind fires). Smog is a shared, cross-border problem.")
-    with st.expander("🔬 How the score is calculated (technical)"):
+    with st.expander("How the score is calculated (technical)"):
         st.markdown(
             "For each day: take fires within **300 km** of Lahore that lie within **±45°** of the direction the "
             "wind blows *from* (NASA POWER 10 m wind at Lahore). Add up each fire's intensity divided by its "
             "distance (closer fires count more). Multiply by 1.5 on calm days (wind < 2 m/s) and by a further "
             "0.25 on humid days (> 70%). Scale to 0–100 so that 100 equals the smokiest 1% of all past season days.")
-    st.caption("⚠️ This is an estimate of smoke **heading toward** Lahore, not a measurement of the air people "
+    st.caption("This is an estimate of smoke **heading toward** Lahore, not a measurement of the air people "
                "breathe (PM2.5) and not an official air-quality forecast. Traffic, industry and weather also cause "
                "smog. Values from 2018 and 2023 onward include newer satellites, so they are not directly "
                "comparable with earlier years.")
