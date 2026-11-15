@@ -19,3 +19,11 @@ data/raw/*
 Thumbs.db
 .vscode/
 .idea/
+
+# Local run logs
+logs/
+
+# Large pipeline outputs (regenerate with harmonize); too big for GitHub
+data/processed/detections.parquet
+data/processed/fire_events.parquet
+data/processed/fire_events_core.parquet

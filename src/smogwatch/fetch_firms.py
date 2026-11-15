@@ -254,9 +254,11 @@ def fetch_season(year: int, season: str = "main", **kwargs) -> pd.DataFrame:
 
 
 def _parse_years(spec: str) -> list[int]:
+    """'2012-2026' (ascending), '2026-2012' (descending), or '2019,2020'."""
     if "-" in spec:
-        a, b = spec.split("-")
-        return list(range(int(a), int(b) + 1))
+        a, b = (int(x) for x in spec.split("-"))
+        step = 1 if b >= a else -1
+        return list(range(a, b + step, step))
     return [int(y) for y in spec.split(",")]
 
 
@@ -265,20 +267,23 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--years", default=str(date.today().year), help="e.g. 2025, 2019,2020 or 2012-2026")
     parser.add_argument("--season", nargs="+", default=["main"], choices=list(config.SEASONS))
     parser.add_argument("--recent", type=int, help="instead of seasons, fetch the last N days")
+    parser.add_argument("--families", nargs="+", choices=list(config.FIRMS_FAMILIES),
+                        help="limit to these satellite families (default: all); lets you run families in parallel")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     avail = data_availability()
     if args.recent:
         end = date.today()
-        df = fetch_period(end - timedelta(days=args.recent - 1), end, availability=avail)
+        df = fetch_period(end - timedelta(days=args.recent - 1), end, availability=avail,
+                          families=args.families)
         print(f"recent {args.recent} days: {len(df)} detections")
         return
     for year in _parse_years(args.years):
         for season in args.season:
-            df = fetch_season(year, season, availability=avail)
+            df = fetch_season(year, season, availability=avail, families=args.families)
             counts = df["source"].value_counts().to_dict() if not df.empty else {}
-            print(f"{year} {season}: {len(df)} detections {counts}")
+            print(f"{year} {season}: {len(df)} detections {counts}", flush=True)
 
 
 if __name__ == "__main__":
