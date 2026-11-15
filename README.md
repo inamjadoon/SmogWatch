@@ -6,7 +6,9 @@ smoke-exposure index for Lahore.**
 Built for the **NASA Space Apps Challenge 2026**, challenge:
 **Harmonization of MODIS and VIIRS Hot Spots**.
 
->  **Live app:** (https://smogwatch.streamlit.app/) ·  **Space Apps project page:** (https://www.spaceappschallenge.org/2026/find-a-team/smogwatch/)
+> **Live app:** (https://smogwatch.streamlit.app/)
+
+**Space Apps project page:** (https://www.spaceappschallenge.org/2026/find-a-team/smogwatch/)
 
 ---
 
