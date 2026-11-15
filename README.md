@@ -117,7 +117,7 @@ SmogWatch/
 ## Getting started
 
 ### Prerequisites
-- Python 3.11+
+- Python 3.10+ (developed on 3.13)
 - A free **NASA FIRMS MAP_KEY**: request one at https://firms.modaps.eosdis.nasa.gov/api/map_key/
 - *(Optional)* a free **NASA Earthdata login** for the aerosol layer: https://urs.earthdata.nasa.gov/
 
@@ -150,12 +150,33 @@ EARTHDATA_PASSWORD=
 
 ## Running the pipeline and app
 ```bash
-# Download data, harmonize, build calendar, index and forecast
+# Refresh recent fires + weather, then rebuild everything (harmonize -> calendar -> smoke index -> app data)
 python scripts/build_all.py
+python scripts/build_all.py --history      # first run: also download all 2012-now main seasons (~35 min)
+python scripts/build_all.py --skip-fetch   # rebuild from cached data only
 
-# Launch the web app
+# Launch the web app (reads only the small files in data/processed/)
 streamlit run app/streamlit_app.py
 ```
+Individual steps: `python -m smogwatch.fetch_firms`, `python -m smogwatch.harmonize`, `python -m smogwatch.calendar`,
+`python -m smogwatch.weather`, `python -m smogwatch.exposure`.
+
+## Key results (main seasons 2012–2026)
+- **1,966,523 detections → 1,202,955 fire events** after cross-sensor de-duplication.
+- **10% of fire events were seen only by MODIS** and 83% only by VIIRS; just 7% by both. The sensors pass at
+  different times (Aqua's drifted orbit now crosses about 2 h after VIIRS), so either sensor alone misses fires.
+- **Trends need a fixed set of satellites.** NOAA-20 (2018+) and NOAA-21 (2023+) inflate raw totals (2017 → 2018: +63%).
+  Using only Terra, Aqua and Suomi-NPP (Mann-Kendall, 2012–2025): region **decreasing** (−3,127 events/yr, p = 0.029),
+  **India decreasing** (p = 0.009), **Pakistan increasing** (+340 events/yr, p = 0.003) with an earlier season peak.
+- Every season peaks in early-to-mid November.
+
+## Changes from the original spec (verified against live NASA APIs, Nov 2026)
+- FIRMS Area API accepts **DAY_RANGE 1–5** only; requests are chunked into 5-day windows.
+- **`VIIRS_NOAA21_SP` exists**; all four satellite families use SP archive + NRT.
+- Suomi-NPP NRT data ends on 2026-11-02 (per FIRMS data availability).
+- Season start uses the p25 of pooled in-season daily counts (min 1) rather than per-season p25 (undefined when 0).
+- The smoke index uses each fire event's max FRP (not the sum), so repeat overpasses are not double-counted.
+- Trends use a constant "core" constellation (Terra, Aqua, Suomi-NPP).
 Run tests:
 ```bash
 pytest
@@ -169,12 +190,12 @@ The app is deployed on **Streamlit Community Cloud**:
 
 ## Roadmap
 - [x] Project plan, PRD and technical spec
-- [ ] Fetch MODIS + VIIRS data (2012→2026)
-- [ ] Harmonization and de-duplication + tests
-- [ ] Burning activity calendar
-- [ ] Lahore Smoke Exposure Index
+- [x] Fetch MODIS + VIIRS data (2012→2026)
+- [x] Harmonization and de-duplication + tests
+- [x] Burning activity calendar + trends (constant constellation)
+- [x] Lahore Smoke Exposure Index
+- [x] Streamlit app
 - [ ] 7-day forecast with baselines
-- [ ] Streamlit app + deployment
 - [ ] Aerosol (AOD) validation
 - [ ] Urdu language toggle
 - [ ] SMS / WhatsApp alerts for districts (post-hackathon)
@@ -183,7 +204,9 @@ The app is deployed on **Streamlit Community Cloud**:
 - Satellite detections are **thermal anomalies**, not confirmed crop fires; some may be industrial or urban heat sources.
 - Clouds, thick smoke and satellite overpass times mean some fires are never detected.
 - The Smoke Exposure Index is a **transport proxy**, not an air-quality (PM2.5) forecast or dispersion model.
-- The forecast is a hackathon prototype trained on about 14 burning seasons.
+- Suomi-NPP near-real-time data is unavailable after 2 Nov 2026, so the 2026 core series is incomplete.
+- The smoke index uses wind at a single point (Lahore) and all satellites, so its values from 2018 and 2023 onward are not directly comparable with earlier years.
+- The 7-day forecast is not included in this version.
 
 ## Team
 **SmogWatch**, NASA Space Apps Challenge 2026
