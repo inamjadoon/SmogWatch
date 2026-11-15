@@ -62,10 +62,16 @@ def load_raw(raw_dir: Path = config.RAW_DIR) -> pd.DataFrame:
     frames = []
     for src_dir in sorted(p for p in raw_dir.iterdir() if p.is_dir()):
         for f in sorted(src_dir.glob("*.csv")):
-            df = pd.read_csv(f, dtype={"acq_time": str, "confidence": str, "version": str})
-            if not df.empty:
-                df["source"] = src_dir.name
-                frames.append(df)
+            df = pd.read_csv(f, dtype={"acq_date": str, "acq_time": str, "confidence": str, "version": str})
+            if df.empty:
+                continue
+            # FIRMS always writes ISO dates. Anything else means the file was edited (e.g. saved by Excel as
+            # 11/11/2026). Skip it rather than guess day/month order. Delete the file and re-fetch to fix.
+            if not df["acq_date"].str.fullmatch(r"\d{4}-\d{2}-\d{2}").all():
+                log.warning("skipping %s: acq_date is not YYYY-MM-DD (file edited?). Delete it and re-fetch.", f)
+                continue
+            df["source"] = src_dir.name
+            frames.append(df)
     if not frames:
         return pd.DataFrame()
     raw = pd.concat(frames, ignore_index=True)
@@ -210,9 +216,10 @@ def build_events(
         "max_frp_mw": g["frp_mw"].max(),
         "sum_frp_mw": g["frp_mw"].sum(),
         "best_confidence": g["_conf"].max().map({v: k for k, v in CONF_ORDER.items()}),
-        "satellites": g["satellite"].agg(lambda s: ",".join(sorted(set(s.dropna())))),
-        "country": g["country"].agg(lambda s: s.mode().iat[0]),
     })
+    # Vectorized (per-cluster Python lambdas were about 98% of runtime on a full season).
+    ev["satellites"] = _satellite_list(det)
+    ev["country"] = _majority_country(det)
     ev["n_viirs"] = ev["n_detections"] - ev["n_modis"]
     ev["seen_by"] = np.select(
         [(ev["n_modis"] > 0) & (ev["n_viirs"] > 0), ev["n_modis"] > 0], ["both", "MODIS"], "VIIRS"
@@ -222,6 +229,25 @@ def build_events(
     cols = ["event_id", "date", "lat", "lon", "first_time_utc", "n_detections", "n_modis", "n_viirs",
             "max_frp_mw", "sum_frp_mw", "best_confidence", "seen_by", "satellites", "country"]
     return ev[cols]
+
+
+def _satellite_list(det: pd.DataFrame) -> pd.Series:
+    """Per cluster: sorted, comma-separated set of satellites (e.g. 'Aqua,N20')."""
+    sats = sorted(det["satellite"].dropna().unique())
+    if not sats:
+        return pd.Series("", index=pd.Index(det["cluster"].unique(), name="cluster"))
+    flags = pd.get_dummies(det["satellite"]).groupby(det["cluster"]).max()[sats]
+    out = pd.Series("", index=flags.index, dtype=object)
+    for s in sats:
+        out = out.where(~flags[s], out + "," + s)
+    return out.str.lstrip(",")
+
+
+def _majority_country(det: pd.DataFrame) -> pd.Series:
+    """Per cluster: the most frequent country tag (ties go to the alphabetically first)."""
+    counts = det.groupby(["cluster", "country"]).size().rename("n").reset_index()
+    counts = counts.sort_values(["cluster", "n", "country"], ascending=[True, False, True])
+    return counts.drop_duplicates("cluster").set_index("cluster")["country"]
 
 
 def eps_sensitivity(detections: pd.DataFrame, eps_values=config.DEDUPE_EPS_SENSITIVITY_KM) -> pd.DataFrame:
@@ -241,14 +267,23 @@ def eps_sensitivity(detections: pd.DataFrame, eps_values=config.DEDUPE_EPS_SENSI
 
 
 def build_all(raw_dir: Path = config.RAW_DIR, out_dir: Path = config.PROCESSED_DIR) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Rebuild detections.parquet and fire_events.parquet from every cached raw file."""
+    """Rebuild from every cached raw file:
+
+    * detections.parquet: all satellites, every confidence level
+    * fire_events.parquet: all satellites (use for maps and daily activity)
+    * fire_events_core.parquet: CORE_SATELLITES only, a constant constellation (use for year-to-year trends)
+    * eps_sensitivity.parquet: event counts at several de-dup radii (for the "Why harmonize?" page)
+    """
     raw = load_raw(raw_dir)
     det = to_detections(raw)
     ev = build_events(det)
+    ev_core = build_events(det[det["satellite"].isin(config.CORE_SATELLITES)])
     out_dir.mkdir(parents=True, exist_ok=True)
     det.to_parquet(out_dir / "detections.parquet", index=False)
     ev.to_parquet(out_dir / "fire_events.parquet", index=False)
-    log.info("raw %s -> detections %s -> events %s", len(raw), len(det), len(ev))
+    ev_core.to_parquet(out_dir / "fire_events_core.parquet", index=False)
+    eps_sensitivity(det).to_parquet(out_dir / "eps_sensitivity.parquet", index=False)
+    log.info("raw %s -> detections %s -> events %s (core %s)", len(raw), len(det), len(ev), len(ev_core))
     return det, ev
 
 
@@ -263,7 +298,7 @@ def main(argv: list[str] | None = None) -> None:
     print(f"  seen_by:    {ev['seen_by'].value_counts().to_dict()}")
     print(f"  country:    {ev['country'].value_counts().to_dict()}")
     print("eps sensitivity:")
-    print(eps_sensitivity(det).to_string(index=False))
+    print(pd.read_parquet(config.PROCESSED_DIR / "eps_sensitivity.parquet").to_string(index=False))
 
 
 if __name__ == "__main__":

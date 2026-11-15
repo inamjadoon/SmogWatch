@@ -87,6 +87,9 @@ FIRMS_FAMILIES: dict[str, tuple[str, str]] = {
     "VIIRS_NOAA20": ("VIIRS_NOAA20_SP", "VIIRS_NOAA20_NRT"),
     "VIIRS_NOAA21": ("VIIRS_NOAA21_SP", "VIIRS_NOAA21_NRT"),
 }
+#: Satellites flying for the whole 2012+ record. Year-to-year comparisons (trends) must use only these,
+#: because NOAA-20 (2018+) and NOAA-21 (2023+) add overpasses and therefore detections.
+CORE_SATELLITES: tuple[str, ...] = ("Terra", "Aqua", "N")
 SOURCES_SP: tuple[str, ...] = tuple(sp for sp, _ in FIRMS_FAMILIES.values())
 SOURCES_NRT: tuple[str, ...] = tuple(nrt for _, nrt in FIRMS_FAMILIES.values())
 

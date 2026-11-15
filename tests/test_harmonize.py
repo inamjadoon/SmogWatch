@@ -77,6 +77,16 @@ def test_same_fire_both_sensors_merged():
     assert 31.000 < e["lat"] < 31.001  # FRP-weighted towards the MODIS point
 
 
+def test_event_satellites_and_majority_country():
+    # Three detections within 1 km straddling the synthetic PK/IN line at 74.5 E: 2 PK, 1 IN
+    d = dets([raw_row("MODIS_SP", 31.0, 74.497, 85), raw_row("VIIRS_NOAA20_SP", 31.0, 74.499, "n"),
+              raw_row("VIIRS_SNPP_SP", 31.0, 74.501, "n")])
+    ev = h.build_events(d)
+    assert len(ev) == 1
+    assert ev["satellites"].iloc[0] == "Aqua,N,N20"
+    assert ev["country"].iloc[0] == "PK"
+
+
 def test_far_apart_and_different_days_not_merged():
     d = dets([raw_row("VIIRS_SNPP_SP", 31.0, 74.0, "n"),
               raw_row("VIIRS_SNPP_SP", 31.05, 74.0, "n"),             # ~5.5 km away
@@ -97,6 +107,17 @@ def test_eps_sensitivity_monotonic():
     assert sens["n_events"].is_monotonic_decreasing
     assert sens.set_index("eps_km").loc[0.5, "n_events"] == 5
     assert sens.set_index("eps_km").loc[1.0, "n_events"] == 1
+
+
+def test_load_raw_skips_non_iso_dates_and_dedupes(tmp_path):
+    header = "latitude,longitude,brightness,scan,track,acq_date,acq_time,satellite,confidence,frp,daynight\n"
+    good = "31.0,74.0,320,1,1,2026-11-11,1045,Aqua,59,5.0,D\n"
+    (tmp_path / "MODIS_NRT").mkdir()
+    (tmp_path / "MODIS_NRT" / "a.csv").write_text(header + good)
+    (tmp_path / "MODIS_NRT" / "b.csv").write_text(header + good)  # overlapping chunk, same row
+    (tmp_path / "MODIS_NRT" / "excel.csv").write_text(header + good.replace("2026-11-11", "11/11/2026"))
+    raw = h.load_raw(tmp_path)
+    assert len(raw) == 1 and raw["source"].iloc[0] == "MODIS_NRT"
 
 
 def test_haversine_and_bearing():
