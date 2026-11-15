@@ -1,0 +1,101 @@
+{
+  "constellation": "core",
+  "satellites": [
+    "Terra",
+    "Aqua",
+    "N"
+  ],
+  "ALL": {
+    "years": [
+      2012,
+      2025
+    ],
+    "n_seasons": 14,
+    "total_events": {
+      "trend": "decreasing",
+      "p_value": 0.0285390635703624,
+      "sen_slope_per_year": -3126.6666666666665,
+      "tau": -0.45054945054945056
+    },
+    "total_frp_mw": {
+      "trend": "decreasing",
+      "p_value": 0.021488739119677414,
+      "sen_slope_per_year": -39468.48250000001,
+      "tau": -0.4725274725274725
+    },
+    "peak_doy": {
+      "trend": "increasing",
+      "p_value": 0.04023394237741518,
+      "sen_slope_per_year": 0.42857142857142855,
+      "tau": 0.4175824175824176
+    },
+    "p50_doy": {
+      "trend": "no trend",
+      "p_value": 0.07019097804228358,
+      "sen_slope_per_year": 0.3333333333333333,
+      "tau": 0.3626373626373626
+    }
+  },
+  "PK": {
+    "years": [
+      2012,
+      2025
+    ],
+    "n_seasons": 14,
+    "total_events": {
+      "trend": "increasing",
+      "p_value": 0.0031143075315551716,
+      "sen_slope_per_year": 340.3636363636364,
+      "tau": 0.6043956043956044
+    },
+    "total_frp_mw": {
+      "trend": "increasing",
+      "p_value": 0.00045888852872688624,
+      "sen_slope_per_year": 3745.766666666663,
+      "tau": 0.7142857142857143
+    },
+    "peak_doy": {
+      "trend": "decreasing",
+      "p_value": 0.046279296588565666,
+      "sen_slope_per_year": -1.0,
+      "tau": -0.4065934065934066
+    },
+    "p50_doy": {
+      "trend": "decreasing",
+      "p_value": 0.0030256103766894693,
+      "sen_slope_per_year": -1.2,
+      "tau": -0.6043956043956044
+    }
+  },
+  "IN": {
+    "years": [
+      2012,
+      2025
+    ],
+    "n_seasons": 14,
+    "total_events": {
+      "trend": "decreasing",
+      "p_value": 0.00859504637602404,
+      "sen_slope_per_year": -3228.75,
+      "tau": -0.5384615384615384
+    },
+    "total_frp_mw": {
+      "trend": "decreasing",
+      "p_value": 0.011793457077065028,
+      "sen_slope_per_year": -43782.406250000015,
+      "tau": -0.5164835164835165
+    },
+    "peak_doy": {
+      "trend": "no trend",
+      "p_value": 0.12152516991741313,
+      "sen_slope_per_year": 0.4,
+      "tau": 0.31868131868131866
+    },
+    "p50_doy": {
+      "trend": "increasing",
+      "p_value": 0.01048203024943839,
+      "sen_slope_per_year": 0.4444444444444444,
+      "tau": 0.5164835164835165
+    }
+  }
+}
